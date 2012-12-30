@@ -29,7 +29,9 @@ public class Main {
 	 * Convert the byte array to a hex-string.
 	 * 
 	 * @param array
+     *      byte array
 	 * @return
+     *      hex string
 	 */
 	public static String getHexStringByByteArray(byte[] array) {
 
