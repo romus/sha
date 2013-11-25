@@ -7,20 +7,20 @@ import com.theromus.sha.Keccak;
 
 public class Main {
 
-	public static void main(String[] args) {
-		byte[] b = getByteArray("The quick brown fox jumps over the lazy dog");
-		String s = getHexStringByByteArray(b);
-		Keccak keccak = new Keccak(1600);
+    public static void main(String[] args) {
+        byte[] b = getByteArray("The quick brown fox jumps over the lazy dog");
+        String s = getHexStringByByteArray(b);
+        Keccak keccak = new Keccak(1600);
 
-		System.out.println("sha-224 = " + keccak.getHash(s, 1152, 28));
-		System.out.println("sha-256 = " + keccak.getHash(s, 1088, 32));
-		System.out.println("sha-384 = " + keccak.getHash(s, 832, 48));
-		System.out.println("sha-512 = " + keccak.getHash(s, 576, 64));
-	}
+        System.out.println("sha-224 = " + keccak.getHash(s, 1152, 28));
+        System.out.println("sha-256 = " + keccak.getHash(s, 1088, 32));
+        System.out.println("sha-384 = " + keccak.getHash(s, 832, 48));
+        System.out.println("sha-512 = " + keccak.getHash(s, 576, 64));
+    }
 
-	public static byte[] getByteArray(String s) {
+    public static byte[] getByteArray(String s) {
         return (s != null) ? s.getBytes(): null;
-	}
+    }
 
     /**
      * Convert the byte array to a hex-string.
