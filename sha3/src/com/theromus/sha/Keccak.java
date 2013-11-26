@@ -53,18 +53,17 @@ public class Keccak {
     private int n;
 		
     /**
+     *  Constructor
      *
-     * @param b
-     * 		b = {25, 50, 100, 200, 400, 800, 1600}
-     * 		sha-3 -> b = 1600.
+     * @param b  {25, 50, 100, 200, 400, 800, 1600} sha-3 -> b = 1600
      */
-	public Keccak(int b) {
+    public Keccak(int b) {
         w = b / 25;
         int l = log(w, 2);
         n = 12 + 2 * l;
-	}
+    }
 		
-	public String getHash(String message, int r, int d) {
+    public String getHash(String message, int r, int d) {
 //		Initialization and padding
         BigInteger[][] S = new BigInteger[5][5];
 
@@ -97,7 +96,7 @@ public class Keccak {
         } while (Z.length() < d * 2);
 
         return Z.substring(0, d * 2);
-	}
+    }
 		
     private BigInteger[][] doKeccackf(BigInteger[][] A) {
         for (int i = 0; i < n; i++)
