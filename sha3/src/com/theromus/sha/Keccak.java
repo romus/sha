@@ -74,13 +74,14 @@ public class Keccak {
         BigInteger[][] P = padding(message, r);
 
 //	    Absorbing phase
-        for (BigInteger[] Pi: P)
+        for (BigInteger[] Pi: P) {
             for (int i = 0; i < 5; i++)
                 for (int j = 0; j < 5; j++)
                     if((i + j * 5)<(r/w))
                         S[i][j] = S[i][j].xor(Pi[i + j *5]);
 
-        doKeccackf(S);
+            doKeccackf(S);
+        }
 
 //	    Squeezing phase
         String Z = "";
