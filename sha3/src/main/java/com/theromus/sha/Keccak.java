@@ -5,14 +5,19 @@ import java.util.Formatter;
 
 /**
  * @author romus
- *
  */
 public class Keccak {
 
-    /** max unsigned long */
+    public static final int DEFAULT_PERMUTATION_WIDTH = 1600;
+
+    /**
+     * max unsigned long
+     */
     private static BigInteger BIT_64 = new BigInteger("18446744073709551615");
-	
-    /** round constants RC[i] */
+
+    /**
+     * round constants RC[i]
+     */
     private BigInteger[] RC = new BigInteger[] {
         new BigInteger("0000000000000001", 16),
         new BigInteger("0000000000008082", 16),
@@ -39,73 +44,76 @@ public class Keccak {
         new BigInteger("0000000080000001", 16),
         new BigInteger("8000000080008008", 16)
     };
-	
-//	The rotation offsets r[x,y].
+
+    //	The rotation offsets r[x,y].
     private int[][] r = new int[][] {
-        {0,    36,     3,    41,    18},
-        {1,    44,    10,    45,     2},
-        {62,    6,    43,    15,    61},
-        {28,   55,    25,    21,    56},
-        {27,   20,    39,     8,    14}
+        {0, 36, 3, 41, 18},
+        {1, 44, 10, 45, 2},
+        {62, 6, 43, 15, 61},
+        {28, 55, 25, 21, 56},
+        {27, 20, 39, 8, 14}
     };
-		
+
     private int w;
+
     private int n;
-		
+
+    public Keccak() {
+        initialize(DEFAULT_PERMUTATION_WIDTH);
+    }
+
     /**
-     *  Constructor
+     * Constructor
      *
-     * @param b  {25, 50, 100, 200, 400, 800, 1600} sha-3 -> b = 1600
+     * @param b {25, 50, 100, 200, 400, 800, 1600} sha-3 -> b = 1600
      */
     public Keccak(int b) {
-        w = b / 25;
-        int l = log(w, 2);
-        n = 12 + 2 * l;
+        initialize(b);
     }
-		
-    public String getHash(String message, int r, int d) {
-//		Initialization and padding
+
+    public String getHash(String message, Parameters parameters) {
+        //		Initialization and padding
         BigInteger[][] S = new BigInteger[5][5];
 
         for (int i = 0; i < 5; i++)
             for (int j = 0; j < 5; j++)
                 S[i][j] = new BigInteger("0", 16);
 
-        BigInteger[][] P = padding(message, r);
+        BigInteger[][] P = padding(message, parameters);
 
-//	    Absorbing phase
-        for (BigInteger[] Pi: P) {
+        //	    Absorbing phase
+        for (BigInteger[] Pi : P) {
             for (int i = 0; i < 5; i++)
                 for (int j = 0; j < 5; j++)
-                    if((i + j * 5)<(r/w))
-                        S[i][j] = S[i][j].xor(Pi[i + j *5]);
+                    if ((i + j * 5) < (parameters.getR() / w))
+                        S[i][j] = S[i][j].xor(Pi[i + j * 5]);
 
             doKeccackf(S);
         }
 
-//	    Squeezing phase
+        //	    Squeezing phase
         String Z = "";
 
         do {
 
             for (int i = 0; i < 5; i++)
                 for (int j = 0; j < 5; j++)
-                    if ((5*i + j) < (r / w))
+                    if ((5 * i + j) < (parameters.getR() / w))
                         Z = Z + addZero(getReverseHexString(S[j][i]), 16).substring(0, 16);
 
             doKeccackf(S);
-        } while (Z.length() < d * 2);
+        } while (Z.length() < parameters.getOutputLength() * 2);
 
-        return Z.substring(0, d * 2);
+        return Z.substring(0, parameters.getOutputLength() * 2);
     }
-		
+
     private BigInteger[][] doKeccackf(BigInteger[][] A) {
         for (int i = 0; i < n; i++)
             A = roundB(A, RC[i]);
 
         return A;
     }
-		
+
     private BigInteger[][] roundB(BigInteger[][] A, BigInteger RC) {
         BigInteger[] C = new BigInteger[5];
         BigInteger[] D = new BigInteger[5];
@@ -136,7 +144,7 @@ public class Keccak {
 
         return A;
     }
-		
+
     private BigInteger rot(BigInteger x, int n) {
         n = n % w;
 
@@ -164,16 +172,16 @@ public class Keccak {
     private int log(int x, int base) {
         return (int) (Math.log(x) / Math.log(base));
     }
-
-    private BigInteger[][] padding(String message, int r) {
+    
+    private BigInteger[][] padding(String message, Parameters parameters) {
         int size;
-        message = message + "01";
+        message = message + parameters.getD();
 
-        while (((message.length() / 2) * 8 % r) != ((r - 8)))
+        while (((message.length() / 2) * 8 % parameters.getR()) != ((parameters.getR() - 8)))
             message = message + "00";
 
         message = message + "80";
-        size = (((message.length() / 2) * 8) / r);
+        size = (((message.length() / 2) * 8) / parameters.getR());
 
         BigInteger[][] arrayM = new BigInteger[size][];
         arrayM[0] = new BigInteger[1600 / w];
@@ -185,7 +193,7 @@ public class Keccak {
 
         for (int _n = 0; _n < message.length(); _n++) {
 
-            if (j > (r / w - 1)) {
+            if (j > (parameters.getR() / w - 1)) {
                 j = 0;
                 i++;
                 arrayM[i] = new BigInteger[1600 / w];
@@ -216,7 +224,7 @@ public class Keccak {
 
     private String addZero(String str, int length) {
         String retStr = str;
-        for (int i = 0; i < length - str.length(); i ++)
+        for (int i = 0; i < length - str.length(); i++)
             retStr += "0";
         return retStr;
     }
@@ -246,7 +254,7 @@ public class Keccak {
         @SuppressWarnings("resource")
         Formatter formatter = new Formatter(stringBuilder);
 
-        for (byte tempByte: array)
+        for (byte tempByte : array)
             formatter.format("%02x", tempByte);
 
         return stringBuilder.toString();
@@ -255,6 +263,12 @@ public class Keccak {
     private void initArray(BigInteger[] array) {
         for (int i = 0; i < array.length; i++)
             array[i] = new BigInteger("0", 16);
+    }
+
+    private void initialize(int b) {
+        w = b / 25;
+        int l = log(w, 2);
+        n = 12 + 2 * l;
     }
 
 }
