@@ -3,3 +3,7 @@ rootProject.name = 'sha'
 include 'sha3'
 project(':sha3').projectDir = new File(rootProject.projectDir, "sha3")
 project(':sha3').name = 'sha3'
+
+include 'sha3-example'
+project(':sha3-example').projectDir = new File(rootProject.projectDir, "sha3-example")
+project(':sha3-example').name = 'sha3-example'

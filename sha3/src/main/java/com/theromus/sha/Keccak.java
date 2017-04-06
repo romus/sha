@@ -1,7 +1,8 @@
 package com.theromus.sha;
 
+import static com.theromus.utils.HexUtils.getReverseHex;
+
 import java.math.BigInteger;
-import java.util.Formatter;
 
 /**
  * @author romus
@@ -75,18 +76,23 @@ public class Keccak {
         //		Initialization and padding
         BigInteger[][] S = new BigInteger[5][5];
 
-        for (int i = 0; i < 5; i++)
-            for (int j = 0; j < 5; j++)
+        for (int i = 0; i < 5; i++) {
+            for (int j = 0; j < 5; j++) {
                 S[i][j] = new BigInteger("0", 16);
+            }
+        }
 
         BigInteger[][] P = padding(message, parameters);
 
         //	    Absorbing phase
         for (BigInteger[] Pi : P) {
-            for (int i = 0; i < 5; i++)
-                for (int j = 0; j < 5; j++)
-                    if ((i + j * 5) < (parameters.getR() / w))
+            for (int i = 0; i < 5; i++) {
+                for (int j = 0; j < 5; j++) {
+                    if ((i + j * 5) < (parameters.getR() / w)) {
                         S[i][j] = S[i][j].xor(Pi[i + j * 5]);
+                    }
+                }
+            }
 
             doKeccackf(S);
         }
@@ -96,10 +102,13 @@ public class Keccak {
 
         do {
 
-            for (int i = 0; i < 5; i++)
-                for (int j = 0; j < 5; j++)
-                    if ((5 * i + j) < (parameters.getR() / w))
-                        Z = Z + addZero(getReverseHexString(S[j][i]), 16).substring(0, 16);
+            for (int i = 0; i < 5; i++) {
+                for (int j = 0; j < 5; j++) {
+                    if ((5 * i + j) < (parameters.getR() / w)) {
+                        Z = Z + addZero(getReverseHex(S[j][i].toByteArray()), 16).substring(0, 16);
+                    }
+                }
+            }
 
             doKeccackf(S);
         } while (Z.length() < parameters.getOutputLength() * 2);
@@ -108,8 +117,9 @@ public class Keccak {
     }
 
     private BigInteger[][] doKeccackf(BigInteger[][] A) {
-        for (int i = 0; i < n; i++)
+        for (int i = 0; i < n; i++) {
             A = roundB(A, RC[i]);
+        }
 
         return A;
     }
@@ -120,24 +130,33 @@ public class Keccak {
         BigInteger[][] B = new BigInteger[5][5];
 
         //θ step
-        for (int i = 0; i < 5; i++)
+        for (int i = 0; i < 5; i++) {
             C[i] = A[i][0].xor(A[i][1]).xor(A[i][2]).xor(A[i][3]).xor(A[i][4]);
+        }
 
-        for (int i = 0; i < 5; i++)
+        for (int i = 0; i < 5; i++) {
             D[i] = C[(i + 4) % 5].xor(rot(C[(i + 1) % 5], 1));
+        }
 
-        for (int i = 0; i < 5; i++)
-            for (int j = 0; j < 5; j++)
+        for (int i = 0; i < 5; i++) {
+            for (int j = 0; j < 5; j++) {
                 A[i][j] = A[i][j].xor(D[i]);
+            }
+        }
 
         //ρ and π steps
-        for (int i = 0; i < 5; i++)
-            for (int j = 0; j < 5; j++)
+        for (int i = 0; i < 5; i++) {
+            for (int j = 0; j < 5; j++) {
                 B[j][(2 * i + 3 * j) % 5] = rot(A[i][j], r[i][j]);
+            }
+        }
+
         //χ step
-        for (int i = 0; i < 5; i++)
-            for (int j = 0; j < 5; j++)
+        for (int i = 0; i < 5; i++) {
+            for (int j = 0; j < 5; j++) {
                 A[i][j] = B[i][j].xor(B[(i + 1) % 5][j].not().and(B[(i + 2) % 5][j]));
+            }
+        }
 
         //ι step
         A[0][0] = A[0][0].xor(RC);
@@ -159,8 +178,9 @@ public class Keccak {
         BigInteger tmpValue = value.shiftLeft(shift);
 
         if (retValue.compareTo(BIT_64) > 0) {
-            for (int i = 64; i < 64 + shift; i++)
+            for (int i = 64; i < 64 + shift; i++) {
                 tmpValue = tmpValue.clearBit(i);
+            }
 
             tmpValue = tmpValue.setBit(64 + shift);
             retValue = tmpValue.and(retValue);
@@ -169,16 +189,13 @@ public class Keccak {
         return retValue;
     }
 
-    private int log(int x, int base) {
-        return (int) (Math.log(x) / Math.log(base));
-    }
-    
     private BigInteger[][] padding(String message, Parameters parameters) {
         int size;
         message = message + parameters.getD();
 
-        while (((message.length() / 2) * 8 % parameters.getR()) != ((parameters.getR() - 8)))
+        while (((message.length() / 2) * 8 % parameters.getR()) != ((parameters.getR() - 8))) {
             message = message + "00";
+        }
 
         message = message + "80";
         size = (((message.length() / 2) * 8) / parameters.getR());
@@ -205,7 +222,7 @@ public class Keccak {
             if ((count * 4 % w) == 0) {
                 String subString = message.substring((count - w / 4), (w / 4) + (count - w / 4));
                 arrayM[i][j] = new BigInteger(subString, 16);
-                String revertString = getReverseHexString(arrayM[i][j]);
+                String revertString = getReverseHex(arrayM[i][j].toByteArray());
                 revertString = addZero(revertString, subString.length());
                 arrayM[i][j] = new BigInteger(revertString, 16);
                 j++;
@@ -216,58 +233,23 @@ public class Keccak {
         return arrayM;
     }
 
-    private String getReverseHexString(BigInteger l) {
-        byte[] array = l.toByteArray();
-        reverseByteArray(array);
-        return getHexStringByByteArray(array);
-    }
-
     private String addZero(String str, int length) {
         String retStr = str;
-        for (int i = 0; i < length - str.length(); i++)
+        for (int i = 0; i < length - str.length(); i++) {
             retStr += "0";
+        }
         return retStr;
     }
 
-    private void reverseByteArray(byte[] array) {
-        if (array == null)
-            return;
-
-        int i = 0;
-        int j = array.length - 1;
-        byte tmp;
-
-        while (j > i) {
-            tmp = array[j];
-            array[j] = array[i];
-            array[i] = tmp;
-            j--;
-            i++;
-        } // while
-    }
-
-    private String getHexStringByByteArray(byte[] array) {
-        if (array == null)
-            return null;
-
-        StringBuilder stringBuilder = new StringBuilder(array.length * 2);
-        @SuppressWarnings("resource")
-        Formatter formatter = new Formatter(stringBuilder);
-
-        for (byte tempByte : array)
-            formatter.format("%02x", tempByte);
-
-        return stringBuilder.toString();
-    }
-
     private void initArray(BigInteger[] array) {
-        for (int i = 0; i < array.length; i++)
+        for (int i = 0; i < array.length; i++) {
             array[i] = new BigInteger("0", 16);
+        }
     }
 
     private void initialize(int b) {
         w = b / 25;
-        int l = log(w, 2);
+        int l = (int) (Math.log(w) / Math.log(2));
         n = 12 + 2 * l;
     }
 

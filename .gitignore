@@ -26,3 +26,4 @@ build/
 
 # Other builds
 sha3/build/
+sha3-example/build/
