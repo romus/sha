@@ -1,256 +1,171 @@
 package com.theromus.sha;
 
-import static com.theromus.utils.HexUtils.getReverseHex;
+import static com.theromus.utils.HexUtils.leftRotate64;
+import static com.theromus.utils.HexUtils.convertToUint;
+import static com.theromus.utils.HexUtils.convertFromLittleEndianTo64;
+import static com.theromus.utils.HexUtils.convertFrom64ToLittleEndian;
+import static java.lang.Math.min;
+import static java.lang.System.arraycopy;
+import static java.util.Arrays.fill;
 
+import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
 
+
 /**
+ * Keccak implementation.
+ *
  * @author romus
  */
 public class Keccak {
 
-    public static final int DEFAULT_PERMUTATION_WIDTH = 1600;
-
-    /**
-     * max unsigned long
-     */
     private static BigInteger BIT_64 = new BigInteger("18446744073709551615");
 
     /**
-     * round constants RC[i]
+     * Do hash.
+     *
+     * @param message input data
+     * @param parameter keccak param
+     * @return byte-array result
      */
-    private BigInteger[] RC = new BigInteger[] {
-        new BigInteger("0000000000000001", 16),
-        new BigInteger("0000000000008082", 16),
-        new BigInteger("800000000000808A", 16),
-        new BigInteger("8000000080008000", 16),
-        new BigInteger("000000000000808B", 16),
-        new BigInteger("0000000080000001", 16),
-        new BigInteger("8000000080008081", 16),
-        new BigInteger("8000000000008009", 16),
-        new BigInteger("000000000000008A", 16),
-        new BigInteger("0000000000000088", 16),
-        new BigInteger("0000000080008009", 16),
-        new BigInteger("000000008000000A", 16),
-        new BigInteger("000000008000808B", 16),
-        new BigInteger("800000000000008B", 16),
-        new BigInteger("8000000000008089", 16),
-        new BigInteger("8000000000008003", 16),
-        new BigInteger("8000000000008002", 16),
-        new BigInteger("8000000000000080", 16),
-        new BigInteger("000000000000800A", 16),
-        new BigInteger("800000008000000A", 16),
-        new BigInteger("8000000080008081", 16),
-        new BigInteger("8000000000008080", 16),
-        new BigInteger("0000000080000001", 16),
-        new BigInteger("8000000080008008", 16)
-    };
+    public byte[] getHash(final byte[] message, final Parameters parameter) {
+        int[] uState = new int[200];
+        int[] uMessage = convertToUint(message);
 
-    //	The rotation offsets r[x,y].
-    private int[][] r = new int[][] {
-        {0, 36, 3, 41, 18},
-        {1, 44, 10, 45, 2},
-        {62, 6, 43, 15, 61},
-        {28, 55, 25, 21, 56},
-        {27, 20, 39, 8, 14}
-    };
 
-    private int w;
+        int rateInBytes = parameter.getRate() / 8;
+        int blockSize = 0;
+        int inputOffset = 0;
 
-    private int n;
+        // Absorbing phase
+        while (inputOffset < uMessage.length) {
+            blockSize = min(uMessage.length - inputOffset, rateInBytes);
+            for (int i = 0; i < blockSize; i++) {
+                uState[i] = uState[i] ^ uMessage[i + inputOffset];
+            }
 
-    public Keccak() {
-        initialize(DEFAULT_PERMUTATION_WIDTH);
+            if (blockSize == rateInBytes) {
+                doKeccakf(uState);
+                blockSize = 0;
+            }
+
+            inputOffset = inputOffset + blockSize;
+        }
+
+        // Padding phase
+        uState[blockSize] = uState[blockSize] ^ parameter.getD();
+        if ((parameter.getD() & 0x80) != 0 && blockSize == (rateInBytes - 1)) {
+            doKeccakf(uState);
+        }
+
+        uState[rateInBytes - 1] = uState[rateInBytes - 1] ^ 0x80;
+        doKeccakf(uState);
+
+        // Squeezing phase
+        ByteArrayOutputStream byteResults = new ByteArrayOutputStream();
+        int tOutputLen = parameter.getOutputLen() / 8;
+        while (tOutputLen > 0) {
+            blockSize = min(tOutputLen, rateInBytes);
+            for (int i = 0; i < blockSize; i++) {
+                byteResults.write((byte) uState[i]);
+            }
+
+            tOutputLen -= blockSize;
+            if (tOutputLen > 0) {
+                doKeccakf(uState);
+            }
+        }
+
+        return byteResults.toByteArray();
+    }
+
+    private void doKeccakf(final int[] uState) {
+        BigInteger[][] lState = new BigInteger[5][5];
+
+        for (int i = 0; i < 5; i++) {
+            for (int j = 0; j < 5; j++) {
+                int[] data = new int[8];
+                arraycopy(uState, 8 * (i + 5 * j), data, 0, data.length);
+                lState[i][j] = convertFromLittleEndianTo64(data);
+            }
+        }
+        roundB(lState);
+
+        fill(uState, 0);
+        for (int i = 0; i < 5; i++) {
+            for (int j = 0; j < 5; j++) {
+                int[] data = convertFrom64ToLittleEndian(lState[i][j]);
+                arraycopy(data, 0, uState, 8 * (i + 5 * j), data.length);
+            }
+        }
+
     }
 
     /**
-     * Constructor
+     * Permutation on the given state.
      *
-     * @param b {25, 50, 100, 200, 400, 800, 1600} sha-3 -> b = 1600
+     * @param state state
      */
-    public Keccak(int b) {
-        initialize(b);
-    }
+    private void roundB(final BigInteger[][] state) {
+        int LFSRstate = 1;
+        for (int round = 0; round < 24; round++) {
+            BigInteger[] C = new BigInteger[5];
+            BigInteger[] D = new BigInteger[5];
 
-    public String getHash(String message, Parameters parameters) {
-        //		Initialization and padding
-        BigInteger[][] S = new BigInteger[5][5];
-
-        for (int i = 0; i < 5; i++) {
-            for (int j = 0; j < 5; j++) {
-                S[i][j] = new BigInteger("0", 16);
-            }
-        }
-
-        BigInteger[][] P = padding(message, parameters);
-
-        //	    Absorbing phase
-        for (BigInteger[] Pi : P) {
+            // θ step
             for (int i = 0; i < 5; i++) {
-                for (int j = 0; j < 5; j++) {
-                    if ((i + j * 5) < (parameters.getR() / w)) {
-                        S[i][j] = S[i][j].xor(Pi[i + j * 5]);
-                    }
-                }
+                C[i] = state[i][0].xor(state[i][1]).xor(state[i][2]).xor(state[i][3]).xor(state[i][4]);
             }
 
-            doKeccackf(S);
-        }
-
-        //	    Squeezing phase
-        String Z = "";
-
-        do {
+            for (int i = 0; i < 5; i++) {
+                D[i] = C[(i + 4) % 5].xor(leftRotate64(C[(i + 1) % 5], 1));
+            }
 
             for (int i = 0; i < 5; i++) {
                 for (int j = 0; j < 5; j++) {
-                    if ((5 * i + j) < (parameters.getR() / w)) {
-                        Z = Z + addZero(getReverseHex(S[j][i].toByteArray()), 16).substring(0, 16);
-                    }
+                    state[i][j] = state[i][j].xor(D[i]);
                 }
             }
 
-            doKeccackf(S);
-        } while (Z.length() < parameters.getOutputLength() * 2);
+            //ρ and π steps
+            int x = 1, y = 0;
+            BigInteger current = state[x][y];
+            for (int i = 0; i < 24; i++) {
+                int tX = x;
+                x = y;
+                y = (2 * tX + 3 * y) % 5;
 
-        return Z.substring(0, parameters.getOutputLength() * 2);
-    }
+                BigInteger shiftValue = current;
+                current = state[x][y];
 
-    private BigInteger[][] doKeccackf(BigInteger[][] A) {
-        for (int i = 0; i < n; i++) {
-            A = roundB(A, RC[i]);
-        }
+                state[x][y] = leftRotate64(shiftValue, (i + 1) * (i + 2) / 2);
+            }
 
-        return A;
-    }
-
-    private BigInteger[][] roundB(BigInteger[][] A, BigInteger RC) {
-        BigInteger[] C = new BigInteger[5];
-        BigInteger[] D = new BigInteger[5];
-        BigInteger[][] B = new BigInteger[5][5];
-
-        //θ step
-        for (int i = 0; i < 5; i++) {
-            C[i] = A[i][0].xor(A[i][1]).xor(A[i][2]).xor(A[i][3]).xor(A[i][4]);
-        }
-
-        for (int i = 0; i < 5; i++) {
-            D[i] = C[(i + 4) % 5].xor(rot(C[(i + 1) % 5], 1));
-        }
-
-        for (int i = 0; i < 5; i++) {
+            //χ step
             for (int j = 0; j < 5; j++) {
-                A[i][j] = A[i][j].xor(D[i]);
-            }
-        }
+                BigInteger[] t = new BigInteger[5];
+                for (int i = 0; i < 5; i++) {
+                    t[i] = state[i][j];
+                }
 
-        //ρ and π steps
-        for (int i = 0; i < 5; i++) {
-            for (int j = 0; j < 5; j++) {
-                B[j][(2 * i + 3 * j) % 5] = rot(A[i][j], r[i][j]);
-            }
-        }
-
-        //χ step
-        for (int i = 0; i < 5; i++) {
-            for (int j = 0; j < 5; j++) {
-                A[i][j] = B[i][j].xor(B[(i + 1) % 5][j].not().and(B[(i + 2) % 5][j]));
-            }
-        }
-
-        //ι step
-        A[0][0] = A[0][0].xor(RC);
-
-        return A;
-    }
-
-    private BigInteger rot(BigInteger x, int n) {
-        n = n % w;
-
-        BigInteger leftShift = getShiftLeft64(x, n);
-        BigInteger rightShift = x.shiftRight(w - n);
-
-        return leftShift.or(rightShift);
-    }
-
-    private BigInteger getShiftLeft64(BigInteger value, int shift) {
-        BigInteger retValue = value.shiftLeft(shift);
-        BigInteger tmpValue = value.shiftLeft(shift);
-
-        if (retValue.compareTo(BIT_64) > 0) {
-            for (int i = 64; i < 64 + shift; i++) {
-                tmpValue = tmpValue.clearBit(i);
+                for (int i = 0; i < 5; i++) {
+                    // ~t[(i + 1) % 5]
+                    BigInteger invertVal = t[(i + 1) % 5].xor(BIT_64);
+                    // t[i] ^ ((~t[(i + 1) % 5]) & t[(i + 2) % 5])
+                    state[i][j] = t[i].xor(invertVal.and(t[(i + 2) % 5]));
+                }
             }
 
-            tmpValue = tmpValue.setBit(64 + shift);
-            retValue = tmpValue.and(retValue);
-        }
-
-        return retValue;
-    }
-
-    private BigInteger[][] padding(String message, Parameters parameters) {
-        int size;
-        message = message + parameters.getD();
-
-        while (((message.length() / 2) * 8 % parameters.getR()) != ((parameters.getR() - 8))) {
-            message = message + "00";
-        }
-
-        message = message + "80";
-        size = (((message.length() / 2) * 8) / parameters.getR());
-
-        BigInteger[][] arrayM = new BigInteger[size][];
-        arrayM[0] = new BigInteger[1600 / w];
-        initArray(arrayM[0]);
-
-        int count = 0;
-        int j = 0;
-        int i = 0;
-
-        for (int _n = 0; _n < message.length(); _n++) {
-
-            if (j > (parameters.getR() / w - 1)) {
-                j = 0;
-                i++;
-                arrayM[i] = new BigInteger[1600 / w];
-                initArray(arrayM[i]);
+            //ι step
+            for (int i = 0; i < 7; i++) {
+                LFSRstate = ((LFSRstate << 1) ^ ((LFSRstate >> 7) * 0x71)) % 256;
+                // pow(2, i) - 1
+                int bitPosition = (1 << i) - 1;
+                if ((LFSRstate & 2) != 0) {
+                    state[0][0] = state[0][0].xor(new BigInteger("1").shiftLeft(bitPosition));
+                }
             }
-
-            count++;
-
-            if ((count * 4 % w) == 0) {
-                String subString = message.substring((count - w / 4), (w / 4) + (count - w / 4));
-                arrayM[i][j] = new BigInteger(subString, 16);
-                String revertString = getReverseHex(arrayM[i][j].toByteArray());
-                revertString = addZero(revertString, subString.length());
-                arrayM[i][j] = new BigInteger(revertString, 16);
-                j++;
-            }
-
         }
-
-        return arrayM;
-    }
-
-    private String addZero(String str, int length) {
-        String retStr = str;
-        for (int i = 0; i < length - str.length(); i++) {
-            retStr += "0";
-        }
-        return retStr;
-    }
-
-    private void initArray(BigInteger[] array) {
-        for (int i = 0; i < array.length; i++) {
-            array[i] = new BigInteger("0", 16);
-        }
-    }
-
-    private void initialize(int b) {
-        w = b / 25;
-        int l = (int) (Math.log(w) / Math.log(2));
-        n = 12 + 2 * l;
     }
 
 }
