@@ -44,11 +44,11 @@ public class Keccak {
                 uState[i] = uState[i] ^ uMessage[i + inputOffset];
             }
 
+            inputOffset = inputOffset + blockSize;
             if (blockSize == rateInBytes) {
                 doKeccakf(uState);
+                blockSize = 0;
             }
-
-            inputOffset = inputOffset + blockSize;
         }
 
         // Padding phase
