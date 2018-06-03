@@ -46,7 +46,6 @@ public class Keccak {
 
             if (blockSize == rateInBytes) {
                 doKeccakf(uState);
-                blockSize = 0;
             }
 
             inputOffset = inputOffset + blockSize;
