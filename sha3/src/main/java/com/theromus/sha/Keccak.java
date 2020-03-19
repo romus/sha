@@ -22,6 +22,7 @@ import java.math.BigInteger;
  * Keccak implementation.
  *
  * @author romus
+ * Implementation of custom output length Ruggiero-Santo
  */
 public class Keccak {
 
@@ -31,10 +32,25 @@ public class Keccak {
     
     public Keccak() {}
     
+    /**
+     * Make instance with specific sha type
+     *   
+     * @param type sha type
+     * @throws NotValidHashLenException Length can't be less then 0
+     * @throws CantSetCustomHashLen Length can be set only for SHAKE128 and SHAKE256
+     */
     public Keccak(final Parameters type) {
     	setHashType(type);
     }
     
+    /**
+     * Make instance with specific sha type and length
+     *   
+     * @param type sha type
+     * @param customLen custom length of hash
+     * @throws NotValidHashLenException Length can't be less then 0
+     * @throws CantSetCustomHashLen Length can be set only for SHAKE128 and SHAKE256
+     */
     public Keccak(final Parameters type, int customLen) throws NotValidHashLenException, CantSetCustomHashLen {
     	setHashType(type);
     	setCustomHashLen(customLen);
@@ -46,15 +62,36 @@ public class Keccak {
 		return type.getOutputLen();
 	}
 
+    /**
+     * 
+     * @param type sha type
+     * @throws NotValidHashLenException Length can't be less then 0
+     * @throws CantSetCustomHashLen Length can be set only for SHAKE128 and SHAKE256
+     */
     public void setHashType(final Parameters type) {
 		this.type = type;
 	}
     
+    /**
+     * 
+     * @param type sha type
+     * @param customLen custom length of hash
+     * @throws NotValidHashLenException Length can't be less then 0
+     * @throws CantSetCustomHashLen Length can be set only for SHAKE128 and SHAKE256
+     */
     public void setHashType(final Parameters type, int customLen) throws NotValidHashLenException, CantSetCustomHashLen {
     	this.type = type;
     	setCustomHashLen(customLen);
 	}
     
+    /**
+     * Check if custom length is valid. Can't be less then 0 and can be set only for SHAKE128 and SHAKE256
+     * 
+     * @param type sha type
+     * @param customLen custom length of hash
+     * @throws NotValidHashLenException Length can't be less then 0
+     * @throws CantSetCustomHashLen Length can be set only for SHAKE128 and SHAKE256
+     */
     private static boolean isValid(Parameters type, int customLen) throws NotValidHashLenException, CantSetCustomHashLen {
     	if(type.getOutputLen() == customLen)
     		return true;
@@ -65,12 +102,23 @@ public class Keccak {
     	return true;
     }
     
+    /**
+     * 
+     * @param customLen custom length of hash
+     * @throws NotValidHashLenException Length can't be less then 0
+     * @throws CantSetCustomHashLen Length can be set only for SHAKE128 and SHAKE256
+     */
     public void setCustomHashLen(int customLen) throws NotValidHashLenException, CantSetCustomHashLen {
     	isValid(type, customLen);
 		this.customLen = customLen;
 	}
     
-    
+    /**
+     * Do hash.
+     * 
+     * @param message input data
+     * @return byte-array result
+     */
     public byte[] getHash(final byte[] message) throws MustBeSetTypeHashException {
     	if(type == null)
     		throw new MustBeSetTypeHashException();
@@ -82,6 +130,13 @@ public class Keccak {
 		return null;
 	}
     
+    /**
+     * Do hash.
+     * 
+     * @param message input data
+     * @param type sha type
+     * @return byte-array result
+     */
     public static byte[] getHash(final byte[] message, final Parameters type) {
 		try {
 			return getHash(message, type, type.getOutputLen());
@@ -95,11 +150,11 @@ public class Keccak {
      * Do hash.
      *
      * @param message input data
-     * @param parameter keccak param
-     * @param customLen
+     * @param type sha type
+     * @param customLen custom length of hash
      * @return byte-array result
-     * @throws CantSetCustomHashLen 
-     * @throws NotValidHashLenException 
+     * @throws CantSetCustomHashLen Length can be set only for SHAKE128 and SHAKE256
+     * @throws NotValidHashLenException Length can't be less then 0
      */
     public static byte[] getHash(final byte[] message, final Parameters type, final int customLen) throws NotValidHashLenException, CantSetCustomHashLen {
     	isValid(type, customLen);
