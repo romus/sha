@@ -93,5 +93,16 @@ public class HexUtils {
 
         return new String(buffer.toByteArray());
     }
-
+    
+    /**
+     * Set to zero last bit according customLen (useful if customLen not is multiple of byte)
+     * 
+     * @param hash byte array of hash
+     * @param customLen custom length of hash
+     * @return byte[]
+     */
+    public static byte[] cutBit(byte[] hash, int customLen) {
+    	int cut = (int) ((Math.ceil(customLen / 8.0)*8) - customLen);
+		return new BigInteger(hash).shiftRight(cut).shiftLeft(cut).toByteArray();
+	}
 }

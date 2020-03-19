@@ -1,9 +1,13 @@
 package com.theromus.sha;
 
-import static com.theromus.utils.HexUtils.leftRotate64;
-import static com.theromus.utils.HexUtils.convertToUint;
-import static com.theromus.utils.HexUtils.convertFromLittleEndianTo64;
 import static com.theromus.utils.HexUtils.convertFrom64ToLittleEndian;
+import static com.theromus.utils.HexUtils.convertFromLittleEndianTo64;
+import static com.theromus.utils.HexUtils.convertToUint;
+import static com.theromus.utils.HexUtils.leftRotate64;
+import static com.theromus.utils.HexUtils.cutBit;
+
+import com.theromus.exception.NotValidHashLenException;
+
 import static java.lang.Math.min;
 import static java.lang.System.arraycopy;
 import static java.util.Arrays.fill;
@@ -16,24 +20,60 @@ import java.math.BigInteger;
  * Keccak implementation.
  *
  * @author romus
+ * Implementation of custom output length Ruggiero-Santo
  */
 public class Keccak {
 
     private static BigInteger BIT_64 = new BigInteger("18446744073709551615");
+    /**
+     * Rate.
+     */
+    private final int rate;
 
+    /**
+     * Delimited suffix.
+     */
+    private final int d;
+
+    /**
+     * Output length (bits).
+     */
+    private final int outputLen;
+    
+    private Keccak(final int rate, final int d, final int outputLen) {
+        this.rate = rate;
+        this.d = d;
+        this.outputLen = outputLen;
+    }
+    
+    public static Keccak getInstance(final Parameters parameters) {
+        return new Keccak(parameters.getRate(), parameters.getD(), parameters.getOutputLen());
+    }
+
+    public static Keccak getInstance(final Parameters parameters, final int customLen) throws NotValidHashLenException {
+    	if (customLen <= 0) {
+    		throw new NotValidHashLenException("Length must be greater than zero");
+        }
+    	if (parameters != Parameters.SHAKE128 && parameters != Parameters.SHAKE256 && parameters.getOutputLen() != customLen) {
+    		throw new NotValidHashLenException("You can set custom output size only with SHAKE128 or SHAKE256");
+        }
+
+        return new Keccak(parameters.getRate(), parameters.getD(), customLen);
+    }
+   
     /**
      * Do hash.
      *
      * @param message input data
-     * @param parameter keccak param
      * @return byte-array result
      */
-    public byte[] getHash(final byte[] message, final Parameters parameter) {
+    public byte[] getHash(final byte[] message) {
+    	
         int[] uState = new int[200];
         int[] uMessage = convertToUint(message);
 
 
-        int rateInBytes = parameter.getRate() / 8;
+        int rateInBytes = this.rate / 8;
         int blockSize = 0;
         int inputOffset = 0;
 
@@ -52,8 +92,8 @@ public class Keccak {
         }
 
         // Padding phase
-        uState[blockSize] = uState[blockSize] ^ parameter.getD();
-        if ((parameter.getD() & 0x80) != 0 && blockSize == (rateInBytes - 1)) {
+        uState[blockSize] = uState[blockSize] ^ this.d;
+        if ((this.d & 0x80) != 0 && blockSize == (rateInBytes - 1)) {
             doKeccakf(uState);
         }
 
@@ -62,7 +102,8 @@ public class Keccak {
 
         // Squeezing phase
         ByteArrayOutputStream byteResults = new ByteArrayOutputStream();
-        int tOutputLen = parameter.getOutputLen() / 8;
+        int tOutputLen = (int) Math.ceil(this.outputLen / 8.0);
+        // byteResults.write(0);
         while (tOutputLen > 0) {
             blockSize = min(tOutputLen, rateInBytes);
             for (int i = 0; i < blockSize; i++) {
@@ -75,10 +116,10 @@ public class Keccak {
             }
         }
 
-        return byteResults.toByteArray();
+        return cutBit(byteResults.toByteArray(), this.outputLen);
     }
 
-    private void doKeccakf(final int[] uState) {
+    private static void doKeccakf(final int[] uState) {
         BigInteger[][] lState = new BigInteger[5][5];
 
         for (int i = 0; i < 5; i++) {
@@ -105,7 +146,7 @@ public class Keccak {
      *
      * @param state state
      */
-    private void roundB(final BigInteger[][] state) {
+    private static void roundB(final BigInteger[][] state) {
         int LFSRstate = 1;
         for (int round = 0; round < 24; round++) {
             BigInteger[] C = new BigInteger[5];
