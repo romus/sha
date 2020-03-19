@@ -93,5 +93,21 @@ public class HexUtils {
 
         return new String(buffer.toByteArray());
     }
-
+    
+    /**
+     * 
+     * @param hash byte array of hash
+     * @param bitToCut num of bit to cut
+     * @return byte[]
+     */
+    public static byte[] cutBit(byte[] hash, int bitToCut) {
+    	
+    	byte[] res = new BigInteger(hash).shiftRight(bitToCut).toByteArray();
+        byte[] result = new byte[hash.length-1];
+        int j = result.length-1, i = res.length-1;
+        for(int k = 0; k < Math.min(result.length, res.length); k++,j--,i--) 
+        	result[j] = res[i];
+    	
+		return result;
+	}
 }

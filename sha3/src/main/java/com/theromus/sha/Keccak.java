@@ -1,9 +1,15 @@
 package com.theromus.sha;
 
-import static com.theromus.utils.HexUtils.leftRotate64;
-import static com.theromus.utils.HexUtils.convertToUint;
-import static com.theromus.utils.HexUtils.convertFromLittleEndianTo64;
 import static com.theromus.utils.HexUtils.convertFrom64ToLittleEndian;
+import static com.theromus.utils.HexUtils.convertFromLittleEndianTo64;
+import static com.theromus.utils.HexUtils.convertToUint;
+import static com.theromus.utils.HexUtils.leftRotate64;
+import static com.theromus.utils.HexUtils.cutBit;
+
+import com.theromus.exception.CantSetCustomHashLen;
+import com.theromus.exception.MustBeSetTypeHashException;
+import com.theromus.exception.NotValidHashLenException;
+
 import static java.lang.Math.min;
 import static java.lang.System.arraycopy;
 import static java.util.Arrays.fill;
@@ -20,20 +26,89 @@ import java.math.BigInteger;
 public class Keccak {
 
     private static BigInteger BIT_64 = new BigInteger("18446744073709551615");
+    private Parameters type = null;
+    private int customLen = 0;
+    
+    public Keccak() {}
+    
+    public Keccak(final Parameters type) {
+    	setHashType(type);
+    }
+    
+    public Keccak(final Parameters type, int customLen) throws NotValidHashLenException, CantSetCustomHashLen {
+    	setHashType(type);
+    	setCustomHashLen(customLen);
+    }
+    
+    private int getOutputLen() {
+    	if((type == Parameters.SHAKE128 || type == Parameters.SHAKE256) && customLen != 0)
+    		return customLen;
+		return type.getOutputLen();
+	}
 
+    public void setHashType(final Parameters type) {
+		this.type = type;
+	}
+    
+    public void setHashType(final Parameters type, int customLen) throws NotValidHashLenException, CantSetCustomHashLen {
+    	this.type = type;
+    	setCustomHashLen(customLen);
+	}
+    
+    private static boolean isValid(Parameters type, int customLen) throws NotValidHashLenException, CantSetCustomHashLen {
+    	if(type.getOutputLen() == customLen)
+    		return true;
+    	if(customLen <= 0)
+    		throw new NotValidHashLenException();
+    	if(type != Parameters.SHAKE128 && type != Parameters.SHAKE256)
+    		throw new CantSetCustomHashLen("You can set custom output size only with SHAKE128 or SHAKE256");
+    	return true;
+    }
+    
+    public void setCustomHashLen(int customLen) throws NotValidHashLenException, CantSetCustomHashLen {
+    	isValid(type, customLen);
+		this.customLen = customLen;
+	}
+    
+    
+    public byte[] getHash(final byte[] message) throws MustBeSetTypeHashException {
+    	if(type == null)
+    		throw new MustBeSetTypeHashException();
+		try {
+			return getHash(message, type, getOutputLen());
+		} catch (NotValidHashLenException | CantSetCustomHashLen e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+    
+    public static byte[] getHash(final byte[] message, final Parameters type) {
+		try {
+			return getHash(message, type, type.getOutputLen());
+		} catch (NotValidHashLenException | CantSetCustomHashLen e) {
+			e.printStackTrace();
+		}
+		return null;
+	}
+    
     /**
      * Do hash.
      *
      * @param message input data
      * @param parameter keccak param
+     * @param customLen
      * @return byte-array result
+     * @throws CantSetCustomHashLen 
+     * @throws NotValidHashLenException 
      */
-    public byte[] getHash(final byte[] message, final Parameters parameter) {
+    public static byte[] getHash(final byte[] message, final Parameters type, final int customLen) throws NotValidHashLenException, CantSetCustomHashLen {
+    	isValid(type, customLen);
+    	
         int[] uState = new int[200];
         int[] uMessage = convertToUint(message);
 
 
-        int rateInBytes = parameter.getRate() / 8;
+        int rateInBytes = type.getRate() / 8;
         int blockSize = 0;
         int inputOffset = 0;
 
@@ -52,8 +127,8 @@ public class Keccak {
         }
 
         // Padding phase
-        uState[blockSize] = uState[blockSize] ^ parameter.getD();
-        if ((parameter.getD() & 0x80) != 0 && blockSize == (rateInBytes - 1)) {
+        uState[blockSize] = uState[blockSize] ^ type.getD();
+        if ((type.getD() & 0x80) != 0 && blockSize == (rateInBytes - 1)) {
             doKeccakf(uState);
         }
 
@@ -62,23 +137,22 @@ public class Keccak {
 
         // Squeezing phase
         ByteArrayOutputStream byteResults = new ByteArrayOutputStream();
-        int tOutputLen = parameter.getOutputLen() / 8;
+        int tOutputLen = (int) Math.ceil(customLen / 8.0);
+        byteResults.write(0);
         while (tOutputLen > 0) {
             blockSize = min(tOutputLen, rateInBytes);
-            for (int i = 0; i < blockSize; i++) {
+            for (int i = 0; i < blockSize; i++)
                 byteResults.write((byte) uState[i]);
-            }
 
             tOutputLen -= blockSize;
-            if (tOutputLen > 0) {
+            if (tOutputLen > 0)
                 doKeccakf(uState);
-            }
         }
 
-        return byteResults.toByteArray();
+        return cutBit(byteResults.toByteArray(), (int) ((Math.ceil(customLen / 8.0)*8) - customLen));
     }
 
-    private void doKeccakf(final int[] uState) {
+    private static void doKeccakf(final int[] uState) {
         BigInteger[][] lState = new BigInteger[5][5];
 
         for (int i = 0; i < 5; i++) {
@@ -105,7 +179,7 @@ public class Keccak {
      *
      * @param state state
      */
-    private void roundB(final BigInteger[][] state) {
+    private static void roundB(final BigInteger[][] state) {
         int LFSRstate = 1;
         for (int round = 0; round < 24; round++) {
             BigInteger[] C = new BigInteger[5];
