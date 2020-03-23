@@ -95,19 +95,15 @@ public class HexUtils {
     }
     
     /**
+     * Set to zero last bit according customLen (useful if customLen not is multiple of byte)
      * 
      * @param hash byte array of hash
-     * @param bitToCut num of bit to cut
+     * @param customLen custom length of hash
      * @return byte[]
      */
-    public static byte[] cutBit(byte[] hash, int bitToCut) {
-    	
-    	byte[] res = new BigInteger(hash).shiftRight(bitToCut).toByteArray();
-        byte[] result = new byte[hash.length-1];
-        int j = result.length-1, i = res.length-1;
-        for(int k = 0; k < Math.min(result.length, res.length); k++,j--,i--) 
-        	result[j] = res[i];
-    	
-		return result;
+    public static byte[] cutBit(byte[] hash, int customLen) {
+    	int cut = (int) ((Math.ceil(customLen / 8.0)*8) - customLen);
+    	System.out.println("\n" + convertBytesToString(hash)+"  "+ cut);
+		return new BigInteger(hash).shiftRight(cut).shiftLeft(cut).toByteArray();
 	}
 }
