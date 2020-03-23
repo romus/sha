@@ -103,7 +103,6 @@ public class HexUtils {
      */
     public static byte[] cutBit(byte[] hash, int customLen) {
     	int cut = (int) ((Math.ceil(customLen / 8.0)*8) - customLen);
-    	System.out.println("\n" + convertBytesToString(hash)+"  "+ cut);
 		return new BigInteger(hash).shiftRight(cut).shiftLeft(cut).toByteArray();
 	}
 }
